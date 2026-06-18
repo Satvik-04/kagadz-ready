@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KagadzReady - AI Document Organizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-xl shadow-sm border border-gray-100 min-h-[600px]">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-blue-600 mb-2">KagadzReady <span class="text-sm bg-purple-100 text-purple-700 px-2 py-1 rounded-full align-middle">AI Powered</span></h1>
+            <p class="text-gray-500">Auto-arrange your documents for Maha-e-Seva Kendras instantly.</p>
+            <div class="mt-4 inline-block bg-green-50 text-green-700 text-sm px-4 py-2 rounded-full font-medium border border-green-200 shadow-sm">
+                🔒 Privacy First: AI models run locally. Your documents never leave your device.
+            </div>
+        </header>
+
+        <section id="screen-selection" class="block space-y-6">
+            <h2 class="text-xl font-semibold border-b pb-2">1. What are you applying for?</h2>
+            
+            <div class="flex flex-col gap-4">
+                <label for="doc-type" class="text-sm font-medium text-gray-700">Select Certificate Type:</label>
+                <select id="doc-type" class="p-3 border rounded shadow-sm focus:outline-none focus:border-blue-500 bg-white text-lg">
+                    </select>
+                
+                <button id="btn-next" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition text-lg shadow-md">
+                    Continue to Uploads →
+                </button>
+            </div>
+        </section>
+
+        <section id="screen-upload" class="hidden space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between border-b pb-2 gap-4">
+                <h2 class="text-xl font-semibold">2. Upload Required Documents</h2>
+                <button id="btn-back" class="text-sm bg-gray-100 px-3 py-1 rounded text-gray-600 hover:bg-gray-200 font-medium transition">
+                    ← Change Certificate
+                </button>
+            </div>
+            
+            <div class="bg-blue-50 p-3 rounded border border-blue-100">
+                <span class="text-sm text-blue-800 font-medium">Preparing sequence for:</span>
+                <span id="selected-doc-title" class="text-sm text-blue-900 font-bold ml-1"></span>
+            </div>
+
+            <div id="upload-container" class="space-y-4 mt-4">
+                </div>
+
+            <button id="btn-merge" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded transition mt-8 text-lg shadow-md">
+                Merge & Download Print-Ready PDF
+            </button>
+            <p id="status-message" class="text-center text-sm mt-2 font-medium"></p>
+        </section>
+
+        <hr class="my-8">
+
+        <section class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+            <h2 class="text-lg font-semibold mb-2">Find Nearest Maha-e-Seva Kendra</h2>
+            <p class="text-sm text-gray-600 mb-4">Enter your pincode to find where to submit your printed file.</p>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="pincode" placeholder="e.g. 440001" class="flex-1 p-3 border rounded shadow-sm focus:outline-none focus:border-blue-500 text-lg" maxlength="6">
+                <button id="btn-map" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded transition font-medium shadow-sm">
+                    Search Map
+                </button>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // --- 1. Centralized Master JSON Configuration Engine ---
+        const config = {
+            "income_cert": {
+                name: "Income Certificate (उत्पन्न प्रमाणपत्र)",
+                sequence: [
+                    { id: "step1", name: "Application Form", instruction: "Needs a ₹5 Court Fee Stamp affixed to top right. 📍 Buy blank form & stamp at local Maha-e-Seva Kendra or local stationery shop near Tahsil office.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step2", name: "Identity Proof (Identity Card / Voter ID / PAN)", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step3", name: "Address Proof (Electricity Bill / Ration Card)", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step4", name: "Income Proof", instruction: "Must be a Talathi Ahwal (with physical ink signature & round Setu stamp), Form 16, or ITR copy.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step5", name: "Self-Declaration Form (Swaghoshanapatra)", instruction: "Sign clearly at bottom. 📍 Available blank at local Setu Kendra / Xerox centers.", accept: ".pdf, .png, .jpg, .jpeg" }
+                ]
+            },
+            "domicile_cert": {
+                name: "Age, Nationality & Domicile Certificate (वय, राष्ट्रीयत्व आणि अधिवास प्रमाणपत्र)",
+                sequence: [
+                    { id: "step1", name: "Application Form", instruction: "Needs a ₹5 Court Fee Stamp affixed. 📍 Buy blank form & stamp at local Maha-e-Seva Kendra or stationery shop near Tahsil office.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step2", name: "Identity Proof (Identity Card / Voter ID)", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step3", name: "Address Proof (Electricity Bill / Ration Card)", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step4", name: "Age & Nationality Proof", instruction: "School Leaving Certificate (TC) or Birth Certificate is mandatory. If using TC, it must clearly state the place of birth.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step5", name: "Continuous Residence Proof", instruction: "Requires an official Talathi Certificate proving continuous residence in Maharashtra for the last 15 years.", accept: ".pdf, .png, .jpg, .jpeg" }
+                ]
+            },
+            "caste_cert": {
+                name: "Caste Certificate (जातीचे प्रमाणपत्र)",
+                sequence: [
+                    { id: "step1", name: "Application Form", instruction: "Needs a ₹5 Court Fee Stamp affixed. 📍 Buy blank form & stamp at local Maha-e-Seva Kendra or stationery shop near Tahsil office.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step2", name: "Identity & Address Proof", instruction: "Scan and upload standard residential proofs combined (e.g., identity verification page and address line).", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step3", name: "Applicant's Proof", instruction: "Upload Applicant's School Leaving Certificate (TC).", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step4", name: "Blood Relative's Caste Proof", instruction: "High rejection risk. Needs Father's, Grandfather's, or Paternal Aunt's TC OR a Kotwal Book Nakkal proving caste entry existed before cut-off dates (1950 for SC, 1961 for NT, 1967 for OBC).", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step5", name: "Caste Validity Affidavit", instruction: "Requires an execution layout on a ₹100 stamp paper or an officially stamped formal Setu declaration layout.", accept: ".pdf, .png, .jpg, .jpeg" }
+                ]
+            },
+            "ncl_cert": {
+                name: "Non-Creamy Layer Certificate (NCL)",
+                sequence: [
+                    { id: "step1", name: "Application Form", instruction: "📍 Buy standard format at local Maha-e-Seva Kendra or printing centers outside Tahsil office.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step2", name: "Valid Base Caste Certificate", instruction: "Strict Rule: You cannot apply for NCL without first possessing an already approved base Caste Certificate copy.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step3", name: "Income Proof (Last 3 Financial Years)", instruction: "Must show proof for last 3 consecutive financial years. Upload 3 separate years of Income Certificates, ITRs, or Form 16s sequentially.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step4", name: "ID & Address Proof", accept: ".pdf, .png, .jpg, .jpeg" }
+                ]
+            },
+            "ews_cert": {
+                name: "Economically Weaker Section (EWS) Certificate",
+                sequence: [
+                    { id: "step1", name: "Application Form", instruction: "📍 Forms available at Setu centers or nearby judicial stamp paper vendors.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step2", name: "ID & Address Proof", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step3", name: "Proof of Open Category", instruction: "Must upload Applicant's School Leaving Certificate showing 'Hindu' with no caste category mentioned, or explicitly stating Open category.", accept: ".pdf, .png, .jpg, .jpeg" },
+                    { id: "step4", name: "Income & Asset Proof", instruction: "Requires a signed Affidavit confirming family's agricultural acreage stays below the mandatory ceiling threshold, plus a Talathi Income layout report.", accept: ".pdf, .png, .jpg, .jpeg" }
+                ]
+            }
+        };
+
+        let currentDocKey = null;
+        let fileStore = {}; 
+
+        // DOM Elements
+        const screenSelection = document.getElementById('screen-selection');
+        const screenUpload = document.getElementById('screen-upload');
+        const docTypeSelect = document.getElementById('doc-type');
+        const uploadContainer = document.getElementById('upload-container');
+        const selectedDocTitle = document.getElementById('selected-doc-title');
+        const statusMessage = document.getElementById('status-message');
+
+        function init() {
+            for (const key in config) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = config[key].name;
+                docTypeSelect.appendChild(option);
+            }
+        }
+
+        document.getElementById('btn-next').addEventListener('click', () => {
+            currentDocKey = docTypeSelect.value;
+            buildUploadSlots(currentDocKey);
+            screenSelection.classList.add('hidden');
+            screenUpload.classList.remove('hidden');
+            statusMessage.textContent = ""; 
+        });
+
+        document.getElementById('btn-back').addEventListener('click', () => {
+            screenUpload.classList.add('hidden');
+            screenSelection.classList.remove('hidden');
+        });
+
+        // --- Client-Side Local AI Engine ---
+        async function scanDocumentWithAI(file, docKey) {
+            const smartStatus = document.getElementById('smart-status');
+            smartStatus.innerHTML = "⏳ AI engine initializing... <i>(Downloading language models to browser cache on first run)</i>";
+            
+            try {
+                const result = await Tesseract.recognize(file, 'eng+mar', {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            smartStatus.textContent = `⏳ AI Scanning text fields: ${Math.round(m.progress * 100)}%`;
+                        }
+                    }
+                });
+
+                const text = result.data.text.toLowerCase();
+                console.log("AI OCR Parsed Output:", text);
+                
+                let targetStepId = null;
+                let detectedType = "";
+
+                // Processing context strings across regional and English tokens safely
+                if (text.includes("unique identification") || text.includes("government of india") || text.includes("भारत सरकार") || text.includes("आधार")) {
+                    targetStepId = "step2";
+                    detectedType = "Identity Document Verification Slot";
+                } else if (text.includes("electricity") || text.includes("bill") || text.includes("महावितरण") || text.includes("consumer no")) {
+                    targetStepId = "step3";
+                    detectedType = "Address Verification Slot (Electricity Bill)";
+                } else if (text.includes("leaving certificate") || text.includes("birth") || text.includes("शाळा") || text.includes("school")) {
+                    targetStepId = "step4";
+                    detectedType = "Age / History Qualification Record";
+                } else if (text.includes("income") || text.includes("उत्पन्न") || text.includes("talathi") || text.includes("form 16")) {
+                    const seq = config[docKey].sequence;
+                    const incomeStep = seq.find(s => s.name.toLowerCase().includes("income"));
+                    if (incomeStep) {
+                        targetStepId = incomeStep.id;
+                        detectedType = "Income Proof Statement Ledger";
+                    }
+                }
+
+                if (targetStepId && document.getElementById(targetStepId)) {
+                    fileStore[targetStepId] = file;
+                    document.getElementById(targetStepId).parentElement.parentElement.classList.add('border-green-400', 'bg-green-50');
+                    smartStatus.innerHTML = `✅ <b>Success!</b> AI matching algorithm aligned file to: <b>${detectedType}</b>.`;
+                } else {
+                    smartStatus.textContent = "🤖 AI scanned text structure but could not safely match category. Please assign via the manual slots below.";
+                }
+            } catch (err) {
+                console.error(err);
+                smartStatus.textContent = "❌ Processing error during local AI parsing. Use manual upload mechanism.";
+            }
+        }
+
+        // --- Dynamic Interface Generation Engine ---
+        function buildUploadSlots(docKey) {
+            uploadContainer.innerHTML = ''; 
+            fileStore = {}; 
+            selectedDocTitle.textContent = config[docKey].name;
+
+            // 1. Inject AI Module layout at top
+            const smartDiv = document.createElement('div');
+            smartDiv.className = "p-5 bg-gradient-to-r from-indigo-50 to-purple-50 border border-purple-200 rounded-lg shadow-sm mb-8";
+            smartDiv.innerHTML = `
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-2xl">🤖</span>
+                    <h3 class="text-lg font-bold text-purple-900">AI Auto-Sorter</h3>
+                </div>
+                <p class="text-sm text-purple-800 mb-4">Upload clean document snapshots. The embedded script identifies structural parameters instantly and maps them down to requirements.</p>
+                <input type="file" id="smart-upload" accept="image/*" class="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer w-full">
+                <p id="smart-status" class="text-sm text-purple-800 mt-3 font-medium min-h-[20px]"></p>
+            `;
+            uploadContainer.appendChild(smartDiv);
+
+            document.getElementById('smart-upload').addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    scanDocumentWithAI(e.target.files[0], docKey);
+                }
+            });
+
+            // 2. Map standard sequence rows with conditional guidance warning boxes
+            const sequence = config[docKey].sequence;
+            sequence.forEach((doc, index) => {
+                const div = document.createElement('div');
+                div.className = "flex flex-col md:flex-row justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm transition";
+                
+                const warningHtml = doc.instruction 
+                    ? `<div class="mt-2 p-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded">
+                         <span class="font-bold">⚠️ Note:</span> ${doc.instruction}
+                       </div>` 
+                    : '';
+
+                div.innerHTML = `
+                    <div class="mb-3 md:mb-0 w-full md:w-2/3 pr-4">
+                        <div class="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Step ${index + 1}</div> 
+                        <div class="text-base font-medium text-gray-800">${doc.name}</div>
+                        ${warningHtml}
+                    </div>
+                    <div class="flex items-center w-full md:w-1/3 justify-start md:justify-end">
+                        <input type="file" id="${doc.id}" accept="${doc.accept}" class="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer w-full">
+                    </div>
+                `;
+                uploadContainer.appendChild(div);
+
+                document.getElementById(doc.id).addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        fileStore[doc.id] = e.target.files[0];
+                        e.target.parentElement.parentElement.classList.add('border-green-300', 'bg-green-50');
+                    }
+                });
+            });
+        }
+
+        // --- PDF Merging Logic ---
+        document.getElementById('btn-merge').addEventListener('click', async () => {
+            const sequence = config[currentDocKey].sequence;
+            const { PDFDocument } = PDFLib;
+            
+            const missingFiles = sequence.filter(doc => !fileStore[doc.id]);
+            if (missingFiles.length > 0) {
+                statusMessage.textContent = `⚠️ Required elements incomplete. Verify all ${sequence.length} tracking steps are filled out.`;
+                statusMessage.className = "text-center text-sm mt-4 font-bold text-red-600 bg-red-50 p-3 rounded";
+                return;
+            }
+
+            statusMessage.textContent = "⏳ Rendering sequence bundle elements into unified array buffer stream...";
+            statusMessage.className = "text-center text-sm mt-4 font-bold text-blue-600 bg-blue-50 p-3 rounded";
+
+            try {
+                const mergedPdf = await PDFDocument.create();
+
+                for (const docConfig of sequence) {
+                    const file = fileStore[docConfig.id];
+                    const arrayBuffer = await file.arrayBuffer();
+                    
+                    if (file.type === "application/pdf") {
+                        const loadedPdf = await PDFDocument.load(arrayBuffer);
+                        const copiedPages = await mergedPdf.copyPages(loadedPdf, loadedPdf.getPageIndices());
+                        copiedPages.forEach((page) => mergedPdf.addPage(page));
+                    } 
+                    else if (file.type.startsWith("image/")) {
+                        let image;
+                        if (file.type === "image/jpeg" || file.type === "image/jpg") {
+                            image = await mergedPdf.embedJpg(arrayBuffer);
+                        } else if (file.type === "image/png") {
+                            image = await mergedPdf.embedPng(arrayBuffer);
+                        }
+                        
+                        const page = mergedPdf.addPage([595.28, 841.89]); 
+                        const { width, height } = image.scaleToFit(page.getWidth() - 40, page.getHeight() - 40);
+                        page.drawImage(image, {
+                            x: page.getWidth() / 2 - width / 2,
+                            y: page.getHeight() / 2 - height / 2,
+                            width: width, height: height,
+                        });
+                    }
+                }
+
+                const pdfBytes = await mergedPdf.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `KagadzReady_${config[currentDocKey].name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                statusMessage.textContent = "✅ File sequence organized. Print-ready compilation successfully extracted.";
+                statusMessage.className = "text-center text-sm mt-4 font-bold text-green-700 bg-green-50 p-3 rounded border border-green-200";
+
+            } catch (error) {
+                console.error(error);
+                statusMessage.textContent = "❌ Binary processing mismatch error. Re-verify document scanning resolution properties.";
+                statusMessage.className = "text-center text-sm mt-4 font-bold text-red-600 bg-red-50 p-3 rounded";
+            }
+        });
+
+        // --- Pincode Routing ---
+        document.getElementById('btn-map').addEventListener('click', () => {
+            const pincode = document.getElementById('pincode').value.trim();
+            if (pincode.length >= 6) {
+                window.open(`https://www.google.com/maps/search/Maha-e-Seva+Kendra+${pincode}`, '_blank');
+            } else {
+                alert("Please declare a comprehensive 6-digit pin index sequence.");
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
